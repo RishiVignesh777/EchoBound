@@ -1,0 +1,7 @@
+{
+  "name": "ECHOBOUND",
+  "description": "A 3D third-person action-adventure prototype featuring timeline manipulation between Present ruins and the Echo past.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
