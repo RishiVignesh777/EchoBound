@@ -390,4 +390,24 @@ export class QuestManager {
     }
     return GameEnding.PRESENT;
   }
+
+  public getFastTravelPoints(): FastTravelPoint[] {
+    return this.fastTravelPoints;
+  }
+
+  public getSecretAreas(): SecretArea[] {
+    return this.secretAreas;
+  }
+
+  public getSideQuests(): SideQuest[] {
+    return this.quests;
+  }
+
+  public getFracturedCores(): FracturedCore[] {
+    return this.fracturedCores;
+  }
+
+  public getEchoRelics(): EchoRelic[] {
+    return this.echoRelics;
+  }
 }
