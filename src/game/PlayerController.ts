@@ -38,8 +38,10 @@ export class PlayerController {
     echoEnergy: 100,
     maxEchoEnergy: 100,
     echoShards: 0,
+    fracturedCores: 0,
     bladeDamage: 25,
     level: 1,
+    maxAnchors: 3,
   };
 
   public currentAction: PlayerAction = 'idle';
@@ -323,6 +325,69 @@ export class PlayerController {
     }
   }
 
+  public setBladeAppearance(bladeColorHex: string) {
+    const col = new THREE.Color(bladeColorHex);
+    this.runeMaterial.color.copy(col);
+    this.runeMaterial.emissive.copy(col);
+    if (this.weaponTrailLine) {
+      (this.weaponTrailLine.material as THREE.LineBasicMaterial).color.copy(col);
+    }
+  }
+
+  public setArmorAppearance(cloakColorHex: string) {
+    const col = new THREE.Color(cloakColorHex);
+    (this.cloak.material as THREE.MeshStandardMaterial).color.copy(col);
+  }
+
+  // UPDATE 1.0 COMBAT ABILITIES
+  public triggerRealityBreak(): boolean {
+    if (this.stats.echoEnergy < 50 || this.actionTimer > 0) return false;
+    this.stats.echoEnergy -= 50;
+    this.currentAction = 'realityBreak';
+    this.actionTimer = 0.85;
+    this.isInvulnerable = true;
+
+    soundManager.playRealityBreak();
+    this.cameraShake = 0.55;
+    this.triggerWeaponTrail();
+    return true;
+  }
+
+  public triggerEchoCounter(): boolean {
+    this.currentAction = 'echoCounter';
+    this.actionTimer = 0.55;
+    this.isInvulnerable = true;
+
+    // Swift dash towards facing direction
+    const forwardX = Math.sin(this.facingAngle);
+    const forwardZ = Math.cos(this.facingAngle);
+    this.velocity.x = forwardX * 18.0;
+    this.velocity.z = forwardZ * 18.0;
+
+    soundManager.playSwordSwing(true);
+    soundManager.playHitImpact(true);
+    this.cameraShake = 0.4;
+    this.triggerWeaponTrail();
+    return true;
+  }
+
+  public triggerEchoFinisher(enemyPos: THREE.Vector3): boolean {
+    if (this.actionTimer > 0) return false;
+    this.currentAction = 'finisher';
+    this.actionTimer = 1.0;
+    this.isInvulnerable = true;
+
+    // Teleport behind enemy for cinematic execution
+    const dir = new THREE.Vector3().subVectors(this.position, enemyPos).normalize();
+    this.position.set(enemyPos.x + dir.x * 1.5, enemyPos.y, enemyPos.z + dir.z * 1.5);
+    this.facingAngle = Math.atan2(-dir.x, -dir.z);
+
+    soundManager.playEchoFinisher();
+    this.cameraShake = 0.6;
+    this.triggerWeaponTrail();
+    return true;
+  }
+
   public handleInput(
     keys: { [key: string]: boolean },
     delta: number,
@@ -384,6 +449,9 @@ export class PlayerController {
       this.currentAction === 'attack2' ||
       this.currentAction === 'attack3' ||
       this.currentAction === 'heavyAttack' ||
+      this.currentAction === 'realityBreak' ||
+      this.currentAction === 'echoCounter' ||
+      this.currentAction === 'finisher' ||
       this.currentAction === 'echoStrike' ||
       this.currentAction === 'timeBreak' ||
       this.currentAction === 'realitySlash' ||
@@ -753,5 +821,23 @@ export class PlayerController {
     // Smooth follow
     this.camera.position.lerp(desiredCamPos, Math.min(1.0, 12 * delta));
     this.camera.lookAt(lookTarget);
+  }
+
+  public setBladeColor(hex: string) {
+    if (this.bladeGlowMesh && (this.bladeGlowMesh.material as THREE.MeshStandardMaterial)) {
+      const mat = this.bladeGlowMesh.material as THREE.MeshStandardMaterial;
+      mat.color.set(hex);
+      mat.emissive.set(hex);
+    }
+    if (this.weaponTrailLine && (this.weaponTrailLine.material as THREE.LineBasicMaterial)) {
+      (this.weaponTrailLine.material as THREE.LineBasicMaterial).color.set(hex);
+    }
+  }
+
+  public setCloakColor(hex: string) {
+    if (this.cloak && (this.cloak.material as THREE.MeshStandardMaterial)) {
+      const mat = this.cloak.material as THREE.MeshStandardMaterial;
+      mat.color.set(hex);
+    }
   }
 }

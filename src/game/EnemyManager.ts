@@ -75,18 +75,38 @@ export class EnemyManager {
     this.createLurker('lurker_1', 'Corrupted Lurker', [-12, 0, -22]);
     this.createLurker('lurker_2', 'Echo Corrupted', [14, 0, -32]);
 
-    // 2. Sunken District: Broken Sentinels
+    // 2. Sunken District: Broken Sentinels & Void Crawler
     this.createSentinel('sentinel_1', 'Broken Sentinel', [24, 0, -68]);
     this.createSentinel('sentinel_2', 'Chrono Sentinel', [-18, 0, -82]);
+    this.createVoidCrawler('crawler_1', 'Void Crawler', [-16, 0, -78]);
 
-    // 3. Crimson Forest: Timeline Stalker
+    // Mini-Boss 1: The Drowned Guardian (Sunken District)
+    this.createDrownedGuardian('drowned_guardian', 'The Drowned Guardian', [0, 0, -96]);
+
+    // 3. Crimson Forest: Timeline Stalker & Reality Devourer
     this.createStalker('stalker_1', 'Timeline Stalker', [0, 0, -125]);
+    this.createRealityDevourer('devourer_1', 'Reality Devourer', [-14, 0, -140]);
 
-    // 4. Clockwork Cathedral: Boss 1 - The Chrono Knight
+    // Mini-Boss 2: The Hollow Warden (Crimson Forest)
+    this.createHollowWarden('hollow_warden', 'The Hollow Warden', [18, 0, -135]);
+
+    // 4. Clockwork Cathedral: Boss 1 - The Chrono Knight & Chrono Sentinel
     this.createChronoKnight('chrono_knight', 'The Chrono Knight', [0, 0, -195]);
+    this.createChronoSentinel('chrono_sent_1', 'Cathedral Chrono Sentinel', [16, 0, -175]);
 
-    // 5. The Grand Observatory: Final Boss - The Architect
+    // Mini-Boss 3: The Clockmaker (Clockwork Cathedral Sanctum)
+    this.createClockmaker('clockmaker', 'The Clockmaker', [-14, 0, -215]);
+
+    // 5. The Grand Observatory: The Architect
     this.createArchitect('architect_boss', 'The Architect (Master of Reality)', [0, 0, -310]);
+
+    // 6. THE ABYSSAL METROPOLIS (Region 6)
+    this.createFracturedKnight('frac_knight_1', 'Fractured Knight', [-12, 0, -380]);
+    this.createEchoStalker('echo_stalker_1', 'Echo Stalker', [14, 0, -415]);
+    this.createFracturedKnight('frac_knight_2', 'Fractured Knight Elite', [10, 0, -445]);
+
+    // Major Boss: The Timelord (Abyssal Metropolis Core)
+    this.createTimelord('timelord_boss', 'The Timelord (Avatar of Rupture)', [0, 0, -485]);
   }
 
   private createLurker(id: string, name: string, pos: [number, number, number]) {
@@ -389,6 +409,442 @@ export class EnemyManager {
     };
 
     this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createVoidCrawler(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x1f162b,
+      emissive: 0x9333ea,
+      emissiveIntensity: 1.2,
+      roughness: 0.4,
+    });
+
+    const body = new THREE.Mesh(new THREE.DodecahedronGeometry(0.65, 0), mat);
+    body.position.y = 0.5;
+    presentGroup.add(body);
+    echoGroup.add(body.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'sentinel',
+      health: 120,
+      maxHealth: 120,
+      timeline: 'both',
+      isBoss: false,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createDrownedGuardian(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const waterTitanMat = new THREE.MeshStandardMaterial({
+      color: 0x0f766e,
+      metalness: 0.7,
+      roughness: 0.2,
+      emissive: 0x06b6d4,
+      emissiveIntensity: 0.8,
+    });
+
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1.2, 3.2, 8), waterTitanMat);
+    body.position.y = 1.6;
+    const mace = new THREE.Mesh(
+      new THREE.SphereGeometry(0.8, 8, 8),
+      new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.9 })
+    );
+    mace.position.set(1.4, 1.8, 0.4);
+
+    presentGroup.add(body);
+    presentGroup.add(mace);
+    echoGroup.add(body.clone());
+    echoGroup.add(mace.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'chrono_knight',
+      health: 380,
+      maxHealth: 380,
+      timeline: 'both',
+      isBoss: true,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createRealityDevourer(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x4a044e,
+      emissive: 0xc026d3,
+      emissiveIntensity: 1.5,
+      roughness: 0.3,
+    });
+    const head = new THREE.Mesh(new THREE.OctahedronGeometry(0.9, 1), mat);
+    head.position.y = 1.6;
+    presentGroup.add(head);
+    echoGroup.add(head.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'stalker',
+      health: 160,
+      maxHealth: 160,
+      timeline: 'both',
+      isBoss: false,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createHollowWarden(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const wardenMat = new THREE.MeshStandardMaterial({
+      color: 0x14532d,
+      roughness: 0.85,
+      metalness: 0.2,
+      emissive: 0x22c55e,
+      emissiveIntensity: 0.7,
+    });
+
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.1, 3.8, 8), wardenMat);
+    trunk.position.y = 1.9;
+    presentGroup.add(trunk);
+    echoGroup.add(trunk.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'chrono_knight',
+      health: 420,
+      maxHealth: 420,
+      timeline: 'both',
+      isBoss: true,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createChronoSentinel(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const goldMat = new THREE.MeshStandardMaterial({
+      color: 0xf59e0b,
+      metalness: 0.9,
+      roughness: 0.2,
+    });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.8, 0.8), goldMat);
+    torso.position.y = 1.2;
+    presentGroup.add(torso);
+    echoGroup.add(torso.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'sentinel',
+      health: 175,
+      maxHealth: 175,
+      timeline: 'both',
+      isBoss: false,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createClockmaker(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const gearMat = new THREE.MeshStandardMaterial({
+      color: 0xb45309,
+      metalness: 0.95,
+      roughness: 0.15,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.9,
+    });
+
+    const core = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.4, 8, 24), gearMat);
+    core.position.y = 2.2;
+    presentGroup.add(core);
+    echoGroup.add(core.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'chrono_knight',
+      health: 440,
+      maxHealth: 440,
+      timeline: 'both',
+      isBoss: true,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createFracturedKnight(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const armorMat = new THREE.MeshStandardMaterial({
+      color: 0x334155,
+      metalness: 0.8,
+      roughness: 0.3,
+      emissive: 0x0ea5e9,
+      emissiveIntensity: 0.5,
+    });
+
+    const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 1.8, 8), armorMat);
+    torso.position.y = 1.1;
+    const sword = new THREE.Mesh(
+      new THREE.BoxGeometry(0.1, 1.6, 0.05),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
+    );
+    sword.position.set(0.6, 1.2, 0.3);
+
+    presentGroup.add(torso);
+    presentGroup.add(sword);
+    echoGroup.add(torso.clone());
+    echoGroup.add(sword.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'sentinel',
+      health: 210,
+      maxHealth: 210,
+      timeline: 'both',
+      isBoss: false,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createEchoStalker(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    const stalkerMat = new THREE.MeshStandardMaterial({
+      color: 0x1e1b4b,
+      emissive: 0x6366f1,
+      emissiveIntensity: 1.4,
+      roughness: 0.2,
+    });
+
+    const body = new THREE.Mesh(new THREE.TetrahedronGeometry(0.8, 1), stalkerMat);
+    body.position.y = 1.5;
+    presentGroup.add(body);
+    echoGroup.add(body.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'stalker',
+      health: 180,
+      maxHealth: 180,
+      timeline: 'both',
+      isBoss: false,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  private createTimelord(id: string, name: string, pos: [number, number, number]) {
+    const group = new THREE.Group();
+    const presentGroup = new THREE.Group();
+    const echoGroup = new THREE.Group();
+
+    // High-tech chronometric avatar
+    const lordMat = new THREE.MeshStandardMaterial({
+      color: 0x020617,
+      metalness: 0.9,
+      roughness: 0.1,
+      emissive: 0xf43f5e,
+      emissiveIntensity: 2.0,
+    });
+
+    const core = new THREE.Mesh(new THREE.DodecahedronGeometry(1.6, 1), lordMat);
+    core.position.y = 3.2;
+
+    const ringA = new THREE.Mesh(
+      new THREE.TorusGeometry(3.0, 0.15, 8, 32),
+      new THREE.MeshBasicMaterial({ color: 0x06b6d4, wireframe: true })
+    );
+    ringA.position.y = 3.2;
+
+    const ringB = new THREE.Mesh(
+      new THREE.TorusGeometry(2.4, 0.12, 8, 32),
+      new THREE.MeshBasicMaterial({ color: 0xfbbf24, wireframe: true })
+    );
+    ringB.position.y = 3.2;
+    ringB.rotation.x = Math.PI / 2;
+
+    presentGroup.add(core);
+    presentGroup.add(ringA);
+    presentGroup.add(ringB);
+
+    echoGroup.add(core.clone());
+    echoGroup.add(ringA.clone());
+    echoGroup.add(ringB.clone());
+
+    group.add(presentGroup);
+    group.add(echoGroup);
+    this.scene.add(group);
+
+    const enemyData: EnemyData = {
+      id,
+      name,
+      type: 'architect',
+      health: 850,
+      maxHealth: 850,
+      timeline: 'both',
+      isBoss: true,
+      position: pos,
+      isAggro: false,
+      state: 'IDLE',
+    };
+    this.enemies.push(new EnemyInstance(enemyData, group, presentGroup, echoGroup));
+  }
+
+  // UPDATE 1.0 COMBAT HELPERS
+  public checkFinisherTarget(
+    playerPos: THREE.Vector3,
+    playerFacing: number
+  ): EnemyInstance | null {
+    for (const enemy of this.enemies) {
+      if (enemy.data.state === 'DEAD') continue;
+      const dist = enemy.mesh.position.distanceTo(playerPos);
+      if (dist < 3.8 && enemy.data.health <= enemy.data.maxHealth * 0.28) {
+        return enemy;
+      }
+    }
+    return null;
+  }
+
+  public applyRealityBreakDamage(
+    playerPos: THREE.Vector3,
+    radius: number = 14.0,
+    damage: number = 120
+  ): HitResult[] {
+    const hits: HitResult[] = [];
+    for (const enemy of this.enemies) {
+      if (enemy.data.state === 'DEAD') continue;
+      const dist = enemy.mesh.position.distanceTo(playerPos);
+      if (dist <= radius) {
+        enemy.data.health -= damage;
+        enemy.staggerTimer = 1.2;
+        enemy.data.state = 'STAGGER';
+        this.spawnHitSparks(enemy.mesh.position);
+
+        const isFatal = enemy.data.health <= 0;
+        if (isFatal) {
+          enemy.data.health = 0;
+          enemy.data.state = 'DEAD';
+          enemy.mesh.visible = false;
+        }
+
+        hits.push({
+          hit: true,
+          damage,
+          enemyId: enemy.data.id,
+          isFatal,
+          position: enemy.mesh.position.clone(),
+        });
+      }
+    }
+    return hits;
+  }
+
+  public applyCounterDamage(enemyId: string, damage: number = 75): HitResult | null {
+    const enemy = this.enemies.find((e) => e.data.id === enemyId);
+    if (!enemy || enemy.data.state === 'DEAD') return null;
+
+    enemy.data.health -= damage;
+    enemy.staggerTimer = 1.5;
+    enemy.data.state = 'STAGGER';
+    this.spawnHitSparks(enemy.mesh.position);
+
+    const isFatal = enemy.data.health <= 0;
+    if (isFatal) {
+      enemy.data.health = 0;
+      enemy.data.state = 'DEAD';
+      enemy.mesh.visible = false;
+    }
+
+    return {
+      hit: true,
+      damage,
+      enemyId: enemy.data.id,
+      isFatal,
+      position: enemy.mesh.position.clone(),
+    };
   }
 
   public update(

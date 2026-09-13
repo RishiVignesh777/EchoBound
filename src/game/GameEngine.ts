@@ -1,10 +1,23 @@
 import * as THREE from 'three';
-import { FloatingText, GameNotification, MemoryShard, PuzzleState, Timeline } from '../types';
+import {
+  FloatingText,
+  GameNotification,
+  MemoryShard,
+  PuzzleState,
+  Timeline,
+  WeatherType,
+  NPCData,
+  GameEnding,
+  DifficultyMode,
+} from '../types';
 import { TimelineManager } from './TimelineManager';
 import { PlayerController } from './PlayerController';
 import { EnemyManager } from './EnemyManager';
 import { PuzzleManager } from './PuzzleManager';
 import { WorldBuilder } from './WorldBuilder';
+import { AbyssalMetropolisBuilder } from './AbyssalMetropolisBuilder';
+import { QuestManager } from './QuestManager';
+import { DynamicWeatherManager } from './DynamicWeatherManager';
 import { soundManager } from '../audio/SoundManager';
 
 export interface GameEngineState {
@@ -27,6 +40,17 @@ export interface GameEngineState {
   inOpeningCinematic: boolean;
   gameCompleted: boolean;
   gameOver: boolean;
+  // 1.0 additions
+  echoVisionActive: boolean;
+  echoVisionMeter: number;
+  echoAnchorCount: number;
+  maxEchoAnchors: number;
+  nearFinisherEnemy: boolean;
+  activeNpc: NPCData | null;
+  currentWeather: WeatherType;
+  photoModeOpen: boolean;
+  worldMapOpen: boolean;
+  activeEnding: GameEnding | null;
 }
 
 export class GameEngine {
@@ -39,8 +63,11 @@ export class GameEngine {
   public timelineManager: TimelineManager;
   public player: PlayerController;
   public world: WorldBuilder;
+  public abyssalMetropolis: AbyssalMetropolisBuilder;
   public enemies: EnemyManager;
   public puzzles: PuzzleManager;
+  public questManager: QuestManager;
+  public weatherManager: DynamicWeatherManager;
 
   // Input tracking
   private keys: { [key: string]: boolean } = {};
@@ -54,8 +81,12 @@ export class GameEngine {
 
   // State & Callbacks
   public isPaused: boolean = false;
+  public photoModeOpen: boolean = false;
+  public worldMapOpen: boolean = false;
+  public activeEnding: GameEnding | null = null;
+  public difficulty: DifficultyMode = 'NORMAL';
   public inOpeningCinematic: boolean = true;
-  public cinematicTimer: number = 6.0;
+  public cinematicTimer: number = 5.0;
   public gameCompleted: boolean = false;
   public gameOver: boolean = false;
   public currentObjective: string = 'Awaken in Veyra. Explore the ruins ahead.';
@@ -74,7 +105,7 @@ export class GameEngine {
       60,
       window.innerWidth / window.innerHeight,
       0.1,
-      600
+      750
     );
 
     // 2. Renderer
@@ -93,8 +124,11 @@ export class GameEngine {
     this.timelineManager = new TimelineManager(this.scene);
     this.player = new PlayerController(this.scene, this.camera);
     this.world = new WorldBuilder(this.scene, this.timelineManager);
+    this.abyssalMetropolis = new AbyssalMetropolisBuilder(this.scene, this.timelineManager);
     this.enemies = new EnemyManager(this.scene, this.timelineManager);
     this.puzzles = new PuzzleManager(this.scene, this.timelineManager);
+    this.questManager = new QuestManager();
+    this.weatherManager = new DynamicWeatherManager(this.scene);
 
     // Initial position for Kael in Forgotten City
     this.player.position.set(0, 0, -4);
@@ -120,17 +154,26 @@ export class GameEngine {
       } else if (e.code === 'KeyE') {
         this.handleInteract();
       } else if (e.code === 'KeyR') {
-        if (this.player.triggerEchoStrike()) {
-          this.executePlayerAttack(this.player.stats.bladeDamage * 2.2, 5.0, 'Echo Strike!');
-        }
+        this.handleEchoAnchor();
+      } else if (e.code === 'KeyV') {
+        this.handleEchoVision();
       } else if (e.code === 'KeyF') {
-        if (this.player.triggerTimeBreak()) {
-          this.addFloatingText('TIME BREAK - SLOW ACTIVATED', '#00f0ff');
-        }
+        this.handleFinisherOrTimeBreak();
       } else if (e.code === 'KeyX') {
-        if (this.player.triggerRealitySlash()) {
-          this.executePlayerAttack(this.player.stats.bladeDamage * 1.8, 6.5, 'Reality Slash!');
-        }
+        this.handleRealityBreak();
+      } else if (e.code === 'KeyM') {
+        this.worldMapOpen = !this.worldMapOpen;
+        if (this.worldMapOpen && document.exitPointerLock) document.exitPointerLock();
+        this.publishState();
+      } else if (e.code === 'KeyP') {
+        this.photoModeOpen = !this.photoModeOpen;
+        if (this.photoModeOpen && document.exitPointerLock) document.exitPointerLock();
+        this.publishState();
+      } else if (e.code === 'KeyT') {
+        this.handleNpcDialogue();
+      } else if (e.code === 'KeyN') {
+        const nextW = this.weatherManager.cycleWeather();
+        this.addNotification('WEATHER SHIFT', `Atmospheric condition: ${nextW}`, 'shift');
       } else if (e.code === 'Tab') {
         e.preventDefault();
         this.togglePause();
@@ -198,6 +241,96 @@ export class GameEngine {
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(w, h);
     });
+  }
+
+  public handleEchoAnchor() {
+    // Attempt to anchor nearest puzzle platform, mechanism, or spatial node
+    const nearestPuzzle = this.puzzles.puzzles.find((p) => !p.state.solved);
+    const pos: [number, number, number] = nearestPuzzle
+      ? [this.player.position.x, this.player.position.y + 0.5, this.player.position.z - 2]
+      : [this.player.position.x, this.player.position.y + 0.5, this.player.position.z];
+
+    const targetName = nearestPuzzle ? nearestPuzzle.state.title : 'Spatial Anchor Node';
+    const targetId = nearestPuzzle ? `anchor_${nearestPuzzle.state.id}` : `anchor_pos_${Math.round(this.player.position.z)}`;
+
+    const res = this.timelineManager.toggleEchoAnchor(targetId, targetName, pos, 30);
+    this.addNotification('ECHO ANCHOR', res.message, 'shift');
+    this.addFloatingText(res.active ? 'ANCHOR LOCKED' : 'ANCHOR DETACHED', res.active ? '#00f0ff' : '#fbbf24');
+  }
+
+  public handleEchoVision() {
+    const active = this.timelineManager.toggleEchoVision(this.player.position);
+    this.addNotification(
+      'ECHO VISION',
+      active ? 'Echo Vision Active: Revealing hidden temporal anomalies' : 'Echo Vision Deactivated',
+      'shift'
+    );
+    this.addFloatingText(active ? 'VISION ACTIVATED' : 'VISION OFF', '#38bdf8');
+  }
+
+  public handleFinisherOrTimeBreak() {
+    const targetEnemy = this.enemies.checkFinisherTarget(this.player.position, this.player.facingAngle);
+    if (targetEnemy) {
+      // Execute cinematic finisher!
+      if (this.player.triggerEchoFinisher(targetEnemy.mesh.position)) {
+        targetEnemy.data.health = 0;
+        targetEnemy.data.state = 'DEAD';
+        targetEnemy.mesh.visible = false;
+        this.addFloatingText('CRITICAL ECHO FINISHER!', '#f43f5e');
+        this.addNotification('FINISHER EXECUTED', `${targetEnemy.data.name} eliminated!`, 'lore');
+        this.player.stats.echoShards += 35;
+      }
+    } else {
+      // Fallback: Time Break ability
+      if (this.player.triggerTimeBreak()) {
+        this.addFloatingText('TIME BREAK - SLOW ACTIVATED', '#00f0ff');
+      }
+    }
+  }
+
+  public handleRealityBreak() {
+    if (this.player.triggerRealityBreak()) {
+      this.addFloatingText('REALITY BREAK SHOCKWAVE!', '#d946ef');
+      this.addNotification('REALITY BREAK', 'Cross-timeline shockwave unleashed!', 'lore');
+      const hits = this.enemies.applyRealityBreakDamage(this.player.position, 14.0, 120);
+      for (const hit of hits) {
+        this.addFloatingText(`-${Math.round(hit.damage)}`, '#ff3366');
+        if (hit.isFatal) {
+          this.player.stats.echoShards += 20;
+        }
+      }
+    }
+  }
+
+  public handleNpcDialogue() {
+    const npc = this.questManager.checkPlayerNearNpc(
+      this.player.position,
+      this.timelineManager.currentTimeline
+    );
+    if (!npc) return;
+
+    this.questManager.activeNpc = npc;
+    const tree = npc.dialogueTree || (npc.dialogue ? npc.dialogue : [npc.currentDialogue || '...']);
+    this.questManager.dialogueIndex = (this.questManager.dialogueIndex + 1) % tree.length;
+    const line = tree[this.questManager.dialogueIndex];
+    npc.currentDialogue = line;
+
+    this.addNotification(npc.name, line, 'lore');
+    this.addFloatingText(npc.name, '#fbbf24');
+    soundManager.playFootstep();
+
+    // Progress associated quest if present
+    if (npc.questId) {
+      this.questManager.progressQuest(npc.questId, 1);
+    }
+  }
+
+  public fastTravelTo(pos: [number, number, number]) {
+    this.player.position.set(pos[0], pos[1], pos[2]);
+    this.player.velocity.set(0, 0, 0);
+    this.addNotification('FAST TRAVEL', 'Arrived at temporal waypoint', 'shift');
+    this.worldMapOpen = false;
+    this.publishState();
   }
 
   public triggerEchoShift() {
@@ -272,6 +405,53 @@ export class GameEngine {
     this.renderer.toneMappingExposure = Math.max(0.6, Math.min(2.5, exposure));
   }
 
+  public setBladeColor(color: string) {
+    this.player.setBladeColor(color);
+    this.addFloatingText('BLADE ATTUNED', color);
+  }
+
+  public setCloakColor(color: string) {
+    this.player.setCloakColor(color);
+    this.addFloatingText('CLOAK WOVEN', color);
+  }
+
+  public setDifficulty(diff: DifficultyMode) {
+    this.difficulty = diff;
+    this.addNotification('DIFFICULTY UPDATED', `Set to ${diff}`, 'ability');
+  }
+
+  public selectEnding(ending: GameEnding) {
+    this.activeEnding = ending;
+    this.gameCompleted = true;
+    let title = 'FATE OF VEYRA CHOSEN';
+    let msg = 'The temporal fracture resolves.';
+    if (ending === 'RESTORE_ECHO') {
+      msg = 'The past is restored. The ruins vanish beneath gleaming golden towers.';
+    } else if (ending === 'ACCEPT_PRESENT') {
+      msg = 'The illusions fade. Humanity accepts the ruins and begins anew.';
+    } else {
+      msg = 'Past and Present fuse into an eternal Paradox Realm.';
+    }
+    this.addNotification(title, msg, 'quest');
+    this.publishState();
+  }
+
+  public toggleWorldMap() {
+    this.worldMapOpen = !this.worldMapOpen;
+    if (this.worldMapOpen && document.exitPointerLock) {
+      document.exitPointerLock();
+    }
+    this.publishState();
+  }
+
+  public togglePhotoMode() {
+    this.photoModeOpen = !this.photoModeOpen;
+    if (this.photoModeOpen && document.exitPointerLock) {
+      document.exitPointerLock();
+    }
+    this.publishState();
+  }
+
   private start() {
     this.isRunning = true;
     this.lastTime = performance.now();
@@ -318,9 +498,31 @@ export class GameEngine {
     }
 
     // 2. Subsystems update
-    this.timelineManager.update(delta);
+    this.timelineManager.update(delta, this.player.position);
     this.player.handleInput(this.keys, delta, this.mouseDelta);
     this.world.update(delta, this.player.position);
+    this.abyssalMetropolis.update(delta);
+    this.weatherManager.update(
+      delta,
+      this.player.position,
+      this.world.ambientLight,
+      this.world.dirLight,
+      this.world.fog
+    );
+
+    // 2b. Check secret exploration and waypoint synchronization
+    const discoveredSecret = this.questManager.checkSecretAreaDiscovery(this.player.position);
+    if (discoveredSecret) {
+      this.addNotification('SECRET DISCOVERED', discoveredSecret.name, 'lore');
+      this.addFloatingText('SECRET DISCOVERED', '#a855f7');
+      this.player.stats.echoShards += 30;
+    }
+
+    const unlockedWaypoint = this.questManager.unlockWaypointsNear(this.player.position);
+    if (unlockedWaypoint) {
+      this.addNotification('TEMPORAL WAYPOINT', `${unlockedWaypoint.name} Synchronized!`, 'shift');
+      this.addFloatingText('WAYPOINT SYNCED', '#38bdf8');
+    }
 
     // 3. Enemies update & player damage handler
     this.enemies.update(delta, this.player.position, (dmg) => {
@@ -445,6 +647,15 @@ export class GameEngine {
         }
       : null;
 
+    const finisherTarget = this.enemies.checkFinisherTarget(
+      this.player.position,
+      this.player.facingAngle
+    );
+    const activeNpc = this.questManager.checkPlayerNearNpc(
+      this.player.position,
+      this.timelineManager.currentTimeline
+    );
+
     this.onStateUpdate({
       timeline: this.timelineManager.currentTimeline,
       health: this.player.stats.health,
@@ -465,6 +676,17 @@ export class GameEngine {
       inOpeningCinematic: this.inOpeningCinematic,
       gameCompleted: this.gameCompleted,
       gameOver: this.gameOver,
+      // 1.0 State additions
+      echoVisionActive: this.timelineManager.echoVisionActive,
+      echoVisionMeter: this.timelineManager.echoVisionMeter,
+      echoAnchorCount: this.timelineManager.getAnchoredCount(),
+      maxEchoAnchors: 3,
+      nearFinisherEnemy: !!finisherTarget,
+      activeNpc,
+      currentWeather: this.weatherManager.currentWeather,
+      photoModeOpen: this.photoModeOpen,
+      worldMapOpen: this.worldMapOpen,
+      activeEnding: this.activeEnding,
     });
   }
 
