@@ -19,6 +19,8 @@ import {
   Map as MapIcon,
   Camera,
   Crosshair,
+  Radio,
+  Target,
 } from 'lucide-react';
 
 interface GameHUDProps {
@@ -30,6 +32,7 @@ interface GameHUDProps {
   onOpenPhotoMode?: () => void;
   onTriggerEchoVision?: () => void;
   onTriggerEchoAnchor?: () => void;
+  onTriggerEchoPulse?: () => void;
   onTriggerFinisher?: () => void;
   onTriggerRealityBreak?: () => void;
   onSpeakNpc?: () => void;
@@ -44,6 +47,7 @@ export const GameHUD: React.FC<GameHUDProps> = ({
   onOpenPhotoMode,
   onTriggerEchoVision,
   onTriggerEchoAnchor,
+  onTriggerEchoPulse,
   onTriggerFinisher,
   onTriggerRealityBreak,
   onSpeakNpc,
@@ -146,6 +150,23 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           {/* 1.0 Anchors & Vision Indicators */}
           <div className="flex items-center gap-3 pt-1">
             <div
+              onClick={onTriggerEchoPulse}
+              className={`pointer-events-auto cursor-pointer flex items-center gap-1.5 px-2.5 py-0.5 rounded border text-[10px] font-mono transition-all ${
+                state.echoPulseActive
+                  ? 'bg-cyan-500/30 border-cyan-300 text-cyan-100 shadow-[0_0_12px_rgba(0,240,255,0.6)] animate-pulse'
+                  : state.echoPulseCooldown > 0
+                  ? 'bg-slate-950/70 border-slate-800 text-slate-500'
+                  : 'bg-slate-950/70 border-cyan-800/80 text-cyan-300 hover:border-cyan-400 hover:text-cyan-100'
+              }`}
+              title="Tactical Echo Pulse: Sonar wave highlights nearby loot, enemies, and mechanisms (Press E)"
+            >
+              <Radio className={`w-3 h-3 ${state.echoPulseActive ? 'animate-spin text-cyan-300' : 'text-cyan-400'}`} />
+              <span>
+                [E] Pulse {state.echoPulseCooldown > 0 && !state.echoPulseActive ? `(${Math.ceil(state.echoPulseCooldown)}s)` : ''}
+              </span>
+            </div>
+
+            <div
               onClick={onTriggerEchoVision}
               className={`pointer-events-auto cursor-pointer flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono transition-colors ${
                 state.echoVisionActive
@@ -201,6 +222,17 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               </span>
             )}
           </div>
+
+          {/* Tactical Sonar Pulse Status Readout */}
+          {state.echoPulseActive && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-950/90 border border-cyan-400/80 text-cyan-200 text-[11px] font-mono shadow-[0_0_15px_rgba(0,240,255,0.4)] animate-pulse">
+              <Radio className="w-3.5 h-3.5 text-cyan-300 animate-spin" />
+              <span className="font-bold tracking-wider">TACTICAL ECHO PULSE ACTIVE:</span>
+              <span>
+                {state.echoPulseTargets ? state.echoPulseTargets.length : 0} targets detected
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Right: Map, Photo Mode, Shards count and Pause Menu trigger */}
@@ -283,6 +315,85 @@ export const GameHUD: React.FC<GameHUDProps> = ({
         >
           <MessageSquare className="w-4 h-4 text-cyan-300" />
           <span>[T] Speak with {state.activeNpc.name} ({state.activeNpc.role})</span>
+        </div>
+      )}
+
+      {/* TACTICAL ECHO PULSE SCANNER SCREEN OVERLAY & 3D RETICLES */}
+      {state.echoPulseActive && (
+        <div className="absolute inset-0 pointer-events-none z-20 overflow-hidden">
+          {/* Futuristic corner brackets & grid vignette */}
+          <div className="absolute inset-4 border border-cyan-500/20 pointer-events-none rounded-xl">
+            <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-cyan-400" />
+            <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-cyan-400" />
+            <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-cyan-400" />
+            <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-cyan-400" />
+            
+            <div className="absolute top-3 left-4 flex items-center gap-2 text-[10px] font-mono text-cyan-400 tracking-widest uppercase">
+              <Radio className="w-3 h-3 animate-spin" />
+              <span>ECHOBOUND // SONAR ECHO PULSE ACTIVE</span>
+            </div>
+          </div>
+
+          {/* Dynamic 3D Projected Screen Reticles for Detected Targets */}
+          {state.echoPulseTargets &&
+            state.echoPulseTargets.map((target) => {
+              if (!target.screenPos || !target.screenPos.visible) return null;
+              const isLoot = target.type === 'LOOT';
+              const isEnemy = target.type === 'ENEMY';
+
+              return (
+                <div
+                  key={target.id}
+                  className="absolute pointer-events-none -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-1 transition-all duration-75"
+                  style={{
+                    left: `${target.screenPos.x}px`,
+                    top: `${target.screenPos.y}px`,
+                  }}
+                >
+                  {/* Holographic Diamond Reticle */}
+                  <div
+                    className={`w-7 h-7 border-2 rotate-45 flex items-center justify-center animate-pulse transition-colors ${
+                      isLoot
+                        ? 'border-amber-400 bg-amber-500/25 shadow-[0_0_15px_rgba(251,191,36,0.6)]'
+                        : isEnemy
+                        ? 'border-rose-500 bg-rose-600/30 shadow-[0_0_15px_rgba(244,63,94,0.7)]'
+                        : 'border-cyan-400 bg-cyan-500/25 shadow-[0_0_15px_rgba(0,240,255,0.6)]'
+                    }`}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        isLoot ? 'bg-amber-300' : isEnemy ? 'bg-rose-300' : 'bg-cyan-300'
+                      }`}
+                    />
+                  </div>
+
+                  {/* Tactical readout tag */}
+                  <div
+                    className={`px-2.5 py-1 rounded-md text-[10px] font-mono font-bold tracking-wider backdrop-blur-md border shadow-xl flex flex-col items-center whitespace-nowrap ${
+                      isLoot
+                        ? 'bg-slate-950/90 border-amber-500/80 text-amber-200 shadow-amber-950/50'
+                        : isEnemy
+                        ? 'bg-slate-950/90 border-rose-500/80 text-rose-200 shadow-rose-950/50'
+                        : 'bg-slate-950/90 border-cyan-500/80 text-cyan-200 shadow-cyan-950/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="opacity-90">
+                        {isLoot ? '◈ LOOT' : isEnemy ? '▲ THREAT' : '◆ MECHANISM'}
+                      </span>
+                      <span>•</span>
+                      <span className="text-white font-black">{target.name}</span>
+                      <span className="opacity-80">({Math.round(target.distance)}m)</span>
+                    </div>
+                    {target.info && (
+                      <span className="text-[9px] font-normal opacity-75 mt-0.5">
+                        {target.info}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
         </div>
       )}
 
@@ -375,6 +486,25 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           <div className="flex items-center gap-1 px-2.5 py-1 rounded bg-slate-950/80 border border-slate-800">
             <span className="text-slate-200 font-bold">C / Shift</span>
             <span>Dodge</span>
+          </div>
+          <div
+            onClick={onTriggerEchoPulse}
+            className={`pointer-events-auto cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded border transition-all ${
+              state.echoPulseActive
+                ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                : state.echoPulseCooldown > 0
+                ? 'bg-slate-950/80 border-slate-800 text-slate-500'
+                : 'bg-slate-950/80 border-cyan-700 text-cyan-300 hover:border-cyan-400'
+            }`}
+          >
+            <span className="text-cyan-200 font-bold">E</span>
+            <span>
+              {state.echoPulseActive
+                ? 'Echo Pulse Active'
+                : state.echoPulseCooldown > 0
+                ? `Echo Pulse (${Math.ceil(state.echoPulseCooldown)}s)`
+                : 'Echo Pulse / Interact'}
+            </span>
           </div>
           <div
             onClick={onTriggerEchoVision}

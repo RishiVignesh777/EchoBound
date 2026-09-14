@@ -253,6 +253,49 @@ class SoundManager {
     });
   }
 
+  public playEchoPulse() {
+    if (!this.ctx || !this.sfxGain) return;
+    const now = this.ctx.currentTime;
+
+    // 1. Resonant sub sweep
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(65, now);
+    subOsc.frequency.exponentialRampToValueAtTime(260, now + 0.28);
+    subOsc.frequency.exponentialRampToValueAtTime(110, now + 0.9);
+
+    subGain.gain.setValueAtTime(0.55, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+
+    subOsc.connect(subGain);
+    subGain.connect(this.sfxGain);
+    subOsc.start(now);
+    subOsc.stop(now + 0.95);
+
+    // 2. High-tech sonar pulse chords
+    [520, 780, 1040, 1560].forEach((freq, idx) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + 0.05);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.25, now + 0.25);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.9, now + 1.2);
+
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.25 / (idx + 1), now + 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2 + idx * 0.15);
+
+      osc.connect(gain);
+      gain.connect(this.sfxGain!);
+      osc.start(now + 0.05);
+      osc.stop(now + 1.5);
+    });
+
+    // 3. Shimmer noise burst
+    this.playNoiseBurst(0.4, 0.2, 1200, 5000);
+  }
+
   public playDodge() {
     if (!this.ctx || !this.sfxGain) return;
     const now = this.ctx.currentTime;

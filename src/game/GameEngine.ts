@@ -9,6 +9,7 @@ import {
   NPCData,
   GameEnding,
   DifficultyMode,
+  EchoPulseTarget,
 } from '../types';
 import { TimelineManager } from './TimelineManager';
 import { PlayerController } from './PlayerController';
@@ -18,6 +19,7 @@ import { WorldBuilder } from './WorldBuilder';
 import { AbyssalMetropolisBuilder } from './AbyssalMetropolisBuilder';
 import { QuestManager } from './QuestManager';
 import { DynamicWeatherManager } from './DynamicWeatherManager';
+import { EchoPulseManager } from './EchoPulseManager';
 import { soundManager } from '../audio/SoundManager';
 
 export interface GameEngineState {
@@ -51,6 +53,11 @@ export interface GameEngineState {
   photoModeOpen: boolean;
   worldMapOpen: boolean;
   activeEnding: GameEnding | null;
+  // Echo Pulse tactical vision
+  echoPulseActive: boolean;
+  echoPulseProgress: number;
+  echoPulseCooldown: number;
+  echoPulseTargets: EchoPulseTarget[];
 }
 
 export class GameEngine {
@@ -68,6 +75,7 @@ export class GameEngine {
   public puzzles: PuzzleManager;
   public questManager: QuestManager;
   public weatherManager: DynamicWeatherManager;
+  public echoPulseManager: EchoPulseManager;
 
   // Input tracking
   private keys: { [key: string]: boolean } = {};
@@ -129,6 +137,7 @@ export class GameEngine {
     this.puzzles = new PuzzleManager(this.scene, this.timelineManager);
     this.questManager = new QuestManager();
     this.weatherManager = new DynamicWeatherManager(this.scene);
+    this.echoPulseManager = new EchoPulseManager(this.scene);
 
     // Initial position for Kael in Forgotten City
     this.player.position.set(0, 0, -4);
@@ -152,7 +161,7 @@ export class GameEngine {
       if (e.code === 'KeyQ') {
         this.triggerEchoShift();
       } else if (e.code === 'KeyE') {
-        this.handleInteract();
+        this.handleEchoPulseOrInteract();
       } else if (e.code === 'KeyR') {
         this.handleEchoAnchor();
       } else if (e.code === 'KeyV') {
@@ -355,6 +364,48 @@ export class GameEngine {
     }
   }
 
+  public handleEchoPulseOrInteract() {
+    // 1. If actively in front of a puzzle/mechanism prompt, interact with it
+    let didInteract = false;
+    if (this.puzzles.activePuzzleId) {
+      if (this.puzzles.interact(this.puzzles.activePuzzleId)) {
+        this.addNotification('PUZZLE SOLVED', 'The path forward has reopened!', 'quest');
+        this.addFloatingText('MECHANISM ACTIVATED', '#ffb703');
+        didInteract = true;
+      }
+    }
+
+    // 2. Trigger the Echo Pulse shader wavefront and tactical vision
+    const triggered = this.echoPulseManager.triggerPulse(
+      this.player.position,
+      this.world,
+      this.puzzles,
+      this.enemies,
+      this.questManager
+    );
+
+    if (triggered) {
+      soundManager.playEchoPulse();
+      const lootCount = this.echoPulseManager.detectedTargets.filter((t) => t.type === 'LOOT').length;
+      const enemyCount = this.echoPulseManager.detectedTargets.filter((t) => t.type === 'ENEMY').length;
+      const interactCount = this.echoPulseManager.detectedTargets.filter((t) => t.type === 'INTERACTIVE').length;
+
+      this.addNotification(
+        'ECHO PULSE',
+        `Sonar scan: ${lootCount} Loot • ${enemyCount} Threats • ${interactCount} Mechanisms`,
+        'ability'
+      );
+      this.addFloatingText('ECHO PULSE SCANNER', '#00f0ff');
+      this.player.cameraShake = 0.25;
+      this.publishState();
+    } else if (!didInteract && this.echoPulseManager.cooldownRemaining > 0) {
+      this.addFloatingText(
+        `PULSE RECHARGING (${Math.ceil(this.echoPulseManager.cooldownRemaining)}s)`,
+        '#64748b'
+      );
+    }
+  }
+
   private executePlayerAttack(damage: number, range: number, label?: string) {
     const hits = this.enemies.checkPlayerAttackHit(
       this.player.position,
@@ -499,6 +550,7 @@ export class GameEngine {
 
     // 2. Subsystems update
     this.timelineManager.update(delta, this.player.position);
+    this.echoPulseManager.update(delta, this.camera);
     this.player.handleInput(this.keys, delta, this.mouseDelta);
     this.world.update(delta, this.player.position);
     this.abyssalMetropolis.update(delta);
@@ -687,12 +739,18 @@ export class GameEngine {
       photoModeOpen: this.photoModeOpen,
       worldMapOpen: this.worldMapOpen,
       activeEnding: this.activeEnding,
+      // Echo Pulse tactical vision
+      echoPulseActive: this.echoPulseManager.isActive,
+      echoPulseProgress: this.echoPulseManager.progress,
+      echoPulseCooldown: this.echoPulseManager.cooldownRemaining,
+      echoPulseTargets: [...this.echoPulseManager.detectedTargets],
     });
   }
 
   public destroy() {
     this.isRunning = false;
     cancelAnimationFrame(this.animFrameId);
+    this.echoPulseManager.endPulse();
     this.renderer.dispose();
   }
 }

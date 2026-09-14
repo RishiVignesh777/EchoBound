@@ -62,7 +62,7 @@ export default function App() {
   };
 
   const handleInteract = () => {
-    engineRef.current?.handleInteract();
+    engineRef.current?.handleEchoPulseOrInteract();
   };
 
   const handleTogglePause = () => {
@@ -156,6 +156,7 @@ export default function App() {
           onOpenPhotoMode={() => setIsPhotoModeOpen(true)}
           onTriggerEchoVision={() => engineRef.current?.handleEchoVision()}
           onTriggerEchoAnchor={() => engineRef.current?.handleEchoAnchor()}
+          onTriggerEchoPulse={() => engineRef.current?.handleEchoPulseOrInteract()}
           onTriggerFinisher={() => engineRef.current?.handleFinisherOrTimeBreak()}
           onTriggerRealityBreak={() => engineRef.current?.handleRealityBreak()}
           onSpeakNpc={() => engineRef.current?.handleNpcDialogue()}

@@ -111,6 +111,26 @@ export interface EchoVisionState {
   maxMeter: number;
 }
 
+export interface EchoPulseTarget {
+  id: string;
+  name: string;
+  type: 'INTERACTIVE' | 'LOOT' | 'ENEMY';
+  position: [number, number, number];
+  distance: number;
+  screenPos?: { x: number; y: number; visible: boolean };
+  info?: string;
+}
+
+export interface EchoPulseState {
+  active: boolean;
+  progress: number;
+  radius: number;
+  maxRadius: number;
+  durationRemaining: number;
+  cooldownRemaining: number;
+  targets: EchoPulseTarget[];
+}
+
 export interface MemoryShard {
   id: string;
   title: string;
