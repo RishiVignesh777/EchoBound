@@ -1,5 +1,6 @@
 import React from 'react';
 import { GameEngineState } from '../game/GameEngine';
+import { EchoPulseCooldownWidget } from './EchoPulseCooldownWidget';
 import {
   Shield,
   Zap,
@@ -147,43 +148,39 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             </div>
           </div>
 
-          {/* 1.0 Anchors & Vision Indicators */}
-          <div className="flex items-center gap-3 pt-1">
-            <div
-              onClick={onTriggerEchoPulse}
-              className={`pointer-events-auto cursor-pointer flex items-center gap-1.5 px-2.5 py-0.5 rounded border text-[10px] font-mono transition-all ${
-                state.echoPulseActive
-                  ? 'bg-cyan-500/30 border-cyan-300 text-cyan-100 shadow-[0_0_12px_rgba(0,240,255,0.6)] animate-pulse'
-                  : state.echoPulseCooldown > 0
-                  ? 'bg-slate-950/70 border-slate-800 text-slate-500'
-                  : 'bg-slate-950/70 border-cyan-800/80 text-cyan-300 hover:border-cyan-400 hover:text-cyan-100'
-              }`}
-              title="Tactical Echo Pulse: Sonar wave highlights nearby loot, enemies, and mechanisms (Press E)"
-            >
-              <Radio className={`w-3 h-3 ${state.echoPulseActive ? 'animate-spin text-cyan-300' : 'text-cyan-400'}`} />
-              <span>
-                [E] Pulse {state.echoPulseCooldown > 0 && !state.echoPulseActive ? `(${Math.ceil(state.echoPulseCooldown)}s)` : ''}
-              </span>
-            </div>
+          {/* 1.0 Ability Controls & Visual Echo Pulse Cooldown */}
+          <div className="flex flex-col gap-2 pt-1.5">
+            <EchoPulseCooldownWidget
+              active={state.echoPulseActive}
+              cooldown={state.echoPulseCooldown}
+              maxCooldown={state.echoPulseMaxCooldown || 2.5}
+              durationRemaining={state.echoPulseDurationRemaining || 0}
+              maxDuration={state.echoPulseMaxDuration || 5.0}
+              targetsCount={state.echoPulseTargets ? state.echoPulseTargets.length : 0}
+              onTrigger={onTriggerEchoPulse}
+              compact={true}
+            />
 
-            <div
-              onClick={onTriggerEchoVision}
-              className={`pointer-events-auto cursor-pointer flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-mono transition-colors ${
-                state.echoVisionActive
-                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
-                  : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Eye className="w-3 h-3" />
-              <span>[V] Vision</span>
-            </div>
+            <div className="flex items-center gap-2">
+              <div
+                onClick={onTriggerEchoVision}
+                className={`pointer-events-auto cursor-pointer flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[10px] font-mono transition-colors ${
+                  state.echoVisionActive
+                    ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
+                    : 'bg-slate-950/70 border-slate-800 text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Eye className="w-3 h-3 text-cyan-400" />
+                <span>[V] Vision</span>
+              </div>
 
-            <div
-              onClick={onTriggerEchoAnchor}
-              className="pointer-events-auto cursor-pointer flex items-center gap-1.5 px-2 py-0.5 rounded border border-slate-800 bg-slate-950/70 text-[10px] font-mono text-slate-400 hover:text-slate-200"
-            >
-              <Anchor className="w-3 h-3 text-cyan-400" />
-              <span>[R] Anchors: {state.echoAnchorCount || 0}/3</span>
+              <div
+                onClick={onTriggerEchoAnchor}
+                className="pointer-events-auto cursor-pointer flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-800 bg-slate-950/70 text-[10px] font-mono text-slate-400 hover:text-slate-200"
+              >
+                <Anchor className="w-3 h-3 text-cyan-400" />
+                <span>[R] Anchors: {state.echoAnchorCount || 0}/3</span>
+              </div>
             </div>
           </div>
         </div>
@@ -231,6 +228,36 @@ export const GameHUD: React.FC<GameHUDProps> = ({
               <span>
                 {state.echoPulseTargets ? state.echoPulseTargets.length : 0} targets detected
               </span>
+              <span className="px-1.5 py-0.2 bg-cyan-800/80 border border-cyan-400/50 rounded text-[10px] font-bold text-cyan-100">
+                {(state.echoPulseDurationRemaining || 0).toFixed(1)}s
+              </span>
+            </div>
+          )}
+
+          {/* Tactical Sonar Cooldown Readout Bar */}
+          {!state.echoPulseActive && state.echoPulseCooldown > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-slate-950/90 border border-cyan-900/60 text-slate-300 text-[10px] font-mono shadow-md backdrop-blur-md">
+              <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+              <span className="text-slate-400 tracking-wider uppercase">PULSE RECHARGING:</span>
+              <span className="text-cyan-300 font-bold font-mono">
+                {state.echoPulseCooldown.toFixed(1)}s
+              </span>
+              <div className="w-16 h-1.5 bg-slate-800 rounded-full overflow-hidden border border-slate-700">
+                <div
+                  className="h-full bg-gradient-to-r from-amber-500 to-cyan-400 transition-all duration-75"
+                  style={{
+                    width: `${Math.min(
+                      100,
+                      Math.max(
+                        0,
+                        ((((state.echoPulseMaxCooldown || 2.5) - state.echoPulseCooldown) /
+                          (state.echoPulseMaxCooldown || 2.5)) *
+                          100)
+                      )
+                    )}%`,
+                  }}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -331,6 +358,9 @@ export const GameHUD: React.FC<GameHUDProps> = ({
             <div className="absolute top-3 left-4 flex items-center gap-2 text-[10px] font-mono text-cyan-400 tracking-widest uppercase">
               <Radio className="w-3 h-3 animate-spin" />
               <span>ECHOBOUND // SONAR ECHO PULSE ACTIVE</span>
+              <span className="px-1.5 py-0.2 rounded bg-cyan-950/90 border border-cyan-400 text-cyan-200 font-bold">
+                {(state.echoPulseDurationRemaining || 0).toFixed(1)}s
+              </span>
             </div>
           </div>
 
@@ -489,22 +519,61 @@ export const GameHUD: React.FC<GameHUDProps> = ({
           </div>
           <div
             onClick={onTriggerEchoPulse}
-            className={`pointer-events-auto cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded border transition-all ${
+            className={`pointer-events-auto cursor-pointer relative overflow-hidden flex items-center gap-1.5 px-3 py-1 rounded border transition-all select-none ${
               state.echoPulseActive
-                ? 'bg-cyan-500/25 border-cyan-400 text-cyan-200 shadow-[0_0_10px_rgba(0,240,255,0.4)]'
+                ? 'bg-cyan-950/90 border-cyan-400 text-cyan-100 shadow-[0_0_12px_rgba(0,240,255,0.5)]'
                 : state.echoPulseCooldown > 0
-                ? 'bg-slate-950/80 border-slate-800 text-slate-500'
-                : 'bg-slate-950/80 border-cyan-700 text-cyan-300 hover:border-cyan-400'
+                ? 'bg-slate-950/90 border-slate-700/80 text-slate-300'
+                : 'bg-slate-950/80 border-cyan-700 text-cyan-300 hover:border-cyan-400 hover:text-cyan-100 shadow-sm'
             }`}
           >
-            <span className="text-cyan-200 font-bold">E</span>
-            <span>
-              {state.echoPulseActive
-                ? 'Echo Pulse Active'
-                : state.echoPulseCooldown > 0
-                ? `Echo Pulse (${Math.ceil(state.echoPulseCooldown)}s)`
-                : 'Echo Pulse / Interact'}
-            </span>
+            {/* Visual cooldown fill progress backdrop */}
+            {state.echoPulseCooldown > 0 && !state.echoPulseActive && (
+              <div
+                className="absolute inset-0 bg-cyan-900/35 transition-all duration-75 pointer-events-none"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    Math.max(
+                      0,
+                      ((((state.echoPulseMaxCooldown || 2.5) - state.echoPulseCooldown) /
+                        (state.echoPulseMaxCooldown || 2.5)) *
+                        100)
+                    )
+                  )}%`,
+                }}
+              />
+            )}
+            {state.echoPulseActive && (
+              <div className="absolute inset-0 bg-cyan-500/20 animate-pulse pointer-events-none" />
+            )}
+
+            <div className="relative z-10 flex items-center gap-1.5">
+              <span className="text-cyan-200 font-black px-1 rounded bg-slate-900/90 border border-cyan-800/80 text-[10px]">
+                E
+              </span>
+              <Radio
+                className={`w-3 h-3 ${
+                  state.echoPulseActive
+                    ? 'text-cyan-300 animate-spin'
+                    : state.echoPulseCooldown > 0
+                    ? 'text-amber-400'
+                    : 'text-cyan-400'
+                }`}
+              />
+              <span>
+                {state.echoPulseActive
+                  ? `Vision Active (${(state.echoPulseDurationRemaining || 0).toFixed(1)}s)`
+                  : state.echoPulseCooldown > 0
+                  ? `Echo Pulse (${state.echoPulseCooldown.toFixed(1)}s)`
+                  : 'Echo Pulse / Interact'}
+              </span>
+              {state.echoPulseCooldown > 0 && !state.echoPulseActive && (
+                <span className="text-[9px] font-bold text-amber-400 bg-amber-950/90 px-1 py-0.2 rounded border border-amber-500/40">
+                  {state.echoPulseCooldown.toFixed(1)}s
+                </span>
+              )}
+            </div>
           </div>
           <div
             onClick={onTriggerEchoVision}

@@ -566,7 +566,9 @@ export class EchoPulseManager {
       radius: this.currentRadius,
       maxRadius: this.maxRadius,
       durationRemaining: this.durationRemaining,
+      maxDuration: this.maxDuration,
       cooldownRemaining: this.cooldownRemaining,
+      maxCooldown: this.maxCooldown,
       targets: this.detectedTargets,
     };
   }

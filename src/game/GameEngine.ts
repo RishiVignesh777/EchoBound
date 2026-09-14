@@ -57,6 +57,9 @@ export interface GameEngineState {
   echoPulseActive: boolean;
   echoPulseProgress: number;
   echoPulseCooldown: number;
+  echoPulseMaxCooldown: number;
+  echoPulseDurationRemaining: number;
+  echoPulseMaxDuration: number;
   echoPulseTargets: EchoPulseTarget[];
 }
 
@@ -743,6 +746,9 @@ export class GameEngine {
       echoPulseActive: this.echoPulseManager.isActive,
       echoPulseProgress: this.echoPulseManager.progress,
       echoPulseCooldown: this.echoPulseManager.cooldownRemaining,
+      echoPulseMaxCooldown: this.echoPulseManager.maxCooldown,
+      echoPulseDurationRemaining: this.echoPulseManager.durationRemaining,
+      echoPulseMaxDuration: this.echoPulseManager.maxDuration,
       echoPulseTargets: [...this.echoPulseManager.detectedTargets],
     });
   }

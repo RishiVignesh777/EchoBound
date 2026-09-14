@@ -127,7 +127,9 @@ export interface EchoPulseState {
   radius: number;
   maxRadius: number;
   durationRemaining: number;
+  maxDuration: number;
   cooldownRemaining: number;
+  maxCooldown: number;
   targets: EchoPulseTarget[];
 }
 
