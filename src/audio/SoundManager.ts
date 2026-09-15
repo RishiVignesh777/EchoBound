@@ -21,12 +21,22 @@ class SoundManager {
 
   private currentTimeline: 'PRESENT' | 'ECHO' = 'PRESENT';
 
+  // 3D Spatial Audio Listener Tracking
+  private listenerPos = { x: 0, y: 0, z: 0 };
+  private listenerForward = { x: 0, y: 0, z: -1 };
+  private listenerUp = { x: 0, y: 1, z: 0 };
+
   constructor() {
     // AudioContext will be initialized on first user interaction to comply with browser autoplay policies
   }
 
   public init() {
-    if (this.ctx) return;
+    if (this.ctx) {
+      if (this.ctx.state === 'suspended') {
+        this.ctx.resume().catch(() => {});
+      }
+      return;
+    }
     try {
       const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       this.ctx = new AudioContextClass();
@@ -46,6 +56,79 @@ class SoundManager {
       this.startAmbience();
     } catch (e) {
       console.warn('AudioContext not supported or blocked:', e);
+    }
+  }
+
+  /**
+   * Updates 3D spatial audio listener position and forward/up vectors from camera.
+   */
+  public updateListener(
+    position: { x: number; y: number; z: number },
+    forward: { x: number; y: number; z: number },
+    up: { x: number; y: number; z: number } = { x: 0, y: 1, z: 0 }
+  ) {
+    this.listenerPos = position;
+    this.listenerForward = forward;
+    this.listenerUp = up;
+
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const listener = this.ctx.listener;
+    if (!listener) return;
+
+    try {
+      if (listener.positionX && typeof listener.positionX.setValueAtTime === 'function') {
+        listener.positionX.setValueAtTime(position.x, now);
+        listener.positionY.setValueAtTime(position.y, now);
+        listener.positionZ.setValueAtTime(position.z, now);
+        listener.forwardX.setValueAtTime(forward.x, now);
+        listener.forwardY.setValueAtTime(forward.y, now);
+        listener.forwardZ.setValueAtTime(forward.z, now);
+        listener.upX.setValueAtTime(up.x, now);
+        listener.upY.setValueAtTime(up.y, now);
+        listener.upZ.setValueAtTime(up.z, now);
+      } else if (typeof (listener as unknown as { setPosition?: Function }).setPosition === 'function') {
+        (listener as unknown as { setPosition: Function }).setPosition(position.x, position.y, position.z);
+        (listener as unknown as { setOrientation: Function }).setOrientation(forward.x, forward.y, forward.z, up.x, up.y, up.z);
+      }
+    } catch {
+      // Gracefully ignore unsupported listener calls
+    }
+  }
+
+  /**
+   * Helper to instantiate a localized 3D HRTF PannerNode connected to sfxGain.
+   */
+  public createSpatialPanner(
+    position: { x: number; y: number; z: number },
+    refDistance: number = 2.5,
+    maxDistance: number = 65.0,
+    rolloff: number = 1.0
+  ): PannerNode | null {
+    if (!this.ctx || !this.sfxGain) return null;
+    try {
+      const panner = this.ctx.createPanner();
+      panner.panningModel = 'HRTF';
+      panner.distanceModel = 'inverse';
+      panner.refDistance = refDistance;
+      panner.maxDistance = maxDistance;
+      panner.rolloffFactor = rolloff;
+      panner.coneInnerAngle = 360;
+
+      const now = this.ctx.currentTime;
+      if (panner.positionX && typeof panner.positionX.setValueAtTime === 'function') {
+        panner.positionX.setValueAtTime(position.x, now);
+        panner.positionY.setValueAtTime(position.y, now);
+        panner.positionZ.setValueAtTime(position.z, now);
+      } else if (typeof (panner as unknown as { setPosition?: Function }).setPosition === 'function') {
+        (panner as unknown as { setPosition: Function }).setPosition(position.x, position.y, position.z);
+      }
+
+      panner.connect(this.sfxGain);
+      return panner;
+    } catch (e) {
+      console.warn('Panner creation failed:', e);
+      return null;
     }
   }
 
@@ -253,47 +336,206 @@ class SoundManager {
     });
   }
 
-  public playEchoPulse() {
-    if (!this.ctx || !this.sfxGain) return;
-    const now = this.ctx.currentTime;
+  public playEchoPulse(
+    origin?: { x: number; y: number; z: number },
+    targets?: Array<{ position: [number, number, number]; type: string; distance: number; name?: string }>
+  ) {
+    this.playSpatialEchoPulse(origin, targets);
+  }
 
-    // 1. Resonant sub sweep
+  /**
+   * Localized spatial audio trigger for Echo Pulse.
+   * Produces an immediate tactile acoustic wavefront at origin with 3D HRTF spatialization,
+   * frequency-swept sonar ping harmonics, and positional echo reflections from detected targets.
+   */
+  public playSpatialEchoPulse(
+    origin?: { x: number; y: number; z: number },
+    targets?: Array<{ position: [number, number, number]; type: string; distance: number; name?: string }>
+  ) {
+    this.init();
+    if (!this.ctx || !this.sfxGain) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+
+    const now = this.ctx.currentTime;
+    const sourcePos = origin || this.listenerPos;
+
+    // Create primary 3D spatial node at pulse center
+    const panner = this.createSpatialPanner(sourcePos, 2.8, 70.0, 0.9);
+    const outputNode: AudioNode = panner || this.sfxGain;
+
+    // 1. Immediate Tactile Sub-bass Shockwave (instant punch < 5ms attack)
     const subOsc = this.ctx.createOscillator();
     const subGain = this.ctx.createGain();
+    const subFilter = this.ctx.createBiquadFilter();
+
+    subFilter.type = 'lowpass';
+    subFilter.frequency.setValueAtTime(340, now);
+    subFilter.frequency.exponentialRampToValueAtTime(75, now + 0.85);
+
     subOsc.type = 'sine';
-    subOsc.frequency.setValueAtTime(65, now);
-    subOsc.frequency.exponentialRampToValueAtTime(260, now + 0.28);
-    subOsc.frequency.exponentialRampToValueAtTime(110, now + 0.9);
+    subOsc.frequency.setValueAtTime(58, now);
+    subOsc.frequency.exponentialRampToValueAtTime(290, now + 0.12);
+    subOsc.frequency.exponentialRampToValueAtTime(42, now + 0.85);
 
-    subGain.gain.setValueAtTime(0.55, now);
-    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
+    subGain.gain.setValueAtTime(0.78, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
 
-    subOsc.connect(subGain);
-    subGain.connect(this.sfxGain);
+    subOsc.connect(subFilter);
+    subFilter.connect(subGain);
+    subGain.connect(outputNode);
     subOsc.start(now);
-    subOsc.stop(now + 0.95);
+    subOsc.stop(now + 0.9);
 
-    // 2. High-tech sonar pulse chords
-    [520, 780, 1040, 1560].forEach((freq, idx) => {
+    // 2. High-Tech Sonar Harmonic Sweep Chirps (spatialized resonant frequencies)
+    const chirpFreqs = [440, 660, 880, 1320, 1760];
+    chirpFreqs.forEach((freq, idx) => {
       const osc = this.ctx!.createOscillator();
       const gain = this.ctx!.createGain();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(freq, now + 0.05);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.25, now + 0.25);
-      osc.frequency.exponentialRampToValueAtTime(freq * 0.9, now + 1.2);
+      const filter = this.ctx!.createBiquadFilter();
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(freq * 1.15, now);
+      filter.Q.setValueAtTime(2.8, now);
+
+      osc.type = idx % 2 === 0 ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq * 0.92, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.38, now + 0.09);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.95, now + 0.95 + idx * 0.1);
 
       gain.gain.setValueAtTime(0.001, now);
-      gain.gain.linearRampToValueAtTime(0.25 / (idx + 1), now + 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 1.2 + idx * 0.15);
+      gain.gain.linearRampToValueAtTime(0.34 / (idx + 1), now + 0.035);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9 + idx * 0.12);
 
-      osc.connect(gain);
-      gain.connect(this.sfxGain!);
-      osc.start(now + 0.05);
-      osc.stop(now + 1.5);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(outputNode);
+      osc.start(now);
+      osc.stop(now + 1.1 + idx * 0.15);
     });
 
-    // 3. Shimmer noise burst
-    this.playNoiseBurst(0.4, 0.2, 1200, 5000);
+    // 3. Expanding Sonic Wavefront Noise Dispersion
+    this.playSpatialNoiseBurst(sourcePos, 0.45, 0.28, 800, 3800);
+
+    // 4. Acoustic Spatial Echo Returns from Detected Targets (Echolocation)
+    if (targets && targets.length > 0) {
+      const nearestTargets = [...targets].sort((a, b) => a.distance - b.distance).slice(0, 8);
+      nearestTargets.forEach((target) => {
+        // Acoustic propagation delay proportional to spatial distance
+        const delay = Math.max(0.06, Math.min(0.75, (target.distance / 24.0) * 0.42));
+        const pingTime = now + delay;
+        const targetPos = { x: target.position[0], y: target.position[1], z: target.position[2] };
+        const targetPanner = this.createSpatialPanner(targetPos, 1.8, 50.0, 1.1);
+        const targetOut: AudioNode = targetPanner || this.sfxGain!;
+
+        const osc = this.ctx!.createOscillator();
+        const gain = this.ctx!.createGain();
+
+        if (target.type === 'LOOT') {
+          // Bright crystalline resonance chime
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(1760, pingTime);
+          osc.frequency.exponentialRampToValueAtTime(2217, pingTime + 0.07);
+          gain.gain.setValueAtTime(0.001, pingTime);
+          gain.gain.linearRampToValueAtTime(0.2, pingTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, pingTime + 0.45);
+        } else if (target.type === 'ENEMY') {
+          // Menacing low dissonance warning pulse
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(330, pingTime);
+          osc.frequency.exponentialRampToValueAtTime(196, pingTime + 0.14);
+          gain.gain.setValueAtTime(0.001, pingTime);
+          gain.gain.linearRampToValueAtTime(0.16, pingTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, pingTime + 0.35);
+        } else {
+          // Resonant mechanism clockwork ping
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(880, pingTime);
+          osc.frequency.exponentialRampToValueAtTime(1174, pingTime + 0.09);
+          gain.gain.setValueAtTime(0.001, pingTime);
+          gain.gain.linearRampToValueAtTime(0.18, pingTime + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, pingTime + 0.4);
+        }
+
+        osc.connect(gain);
+        gain.connect(targetOut);
+        osc.start(pingTime);
+        osc.stop(pingTime + 0.5);
+      });
+    }
+  }
+
+  /**
+   * Immediate dry tactile click feedback when player attempts Echo Pulse while on cooldown.
+   */
+  public playCooldownRefused(origin?: { x: number; y: number; z: number }) {
+    this.init();
+    if (!this.ctx || !this.sfxGain) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+
+    const now = this.ctx.currentTime;
+    const sourcePos = origin || this.listenerPos;
+    const panner = this.createSpatialPanner(sourcePos, 1.2, 30.0, 1.5);
+    const output: AudioNode = panner || this.sfxGain;
+
+    [0, 0.055].forEach((offset) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(170, now + offset);
+      osc.frequency.exponentialRampToValueAtTime(65, now + offset + 0.035);
+      gain.gain.setValueAtTime(0.14, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.045);
+
+      osc.connect(gain);
+      gain.connect(output);
+      osc.start(now + offset);
+      osc.stop(now + offset + 0.05);
+    });
+  }
+
+  /**
+   * Plays a 3D localized filtered noise burst for physical spatial dispersion.
+   */
+  public playSpatialNoiseBurst(
+    position: { x: number; y: number; z: number },
+    duration: number,
+    volume: number,
+    lowFreq: number,
+    highFreq: number
+  ) {
+    if (!this.ctx || !this.sfxGain) return;
+    const bufferSize = Math.floor(this.ctx.sampleRate * duration);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime((lowFreq + highFreq) / 2, this.ctx.currentTime);
+    filter.Q.setValueAtTime(1.1, this.ctx.currentTime);
+
+    const gain = this.ctx.createGain();
+    const now = this.ctx.currentTime;
+    gain.gain.setValueAtTime(volume, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    const panner = this.createSpatialPanner(position, 2.5, 55.0, 1.0);
+    const targetOut: AudioNode = panner || this.sfxGain;
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(targetOut);
+
+    noise.start(now);
   }
 
   public playDodge() {

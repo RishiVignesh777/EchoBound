@@ -388,7 +388,15 @@ export class GameEngine {
     );
 
     if (triggered) {
-      soundManager.playEchoPulse();
+      // Localized 3D spatial audio trigger positioned directly at player coordinates
+      soundManager.playSpatialEchoPulse(
+        {
+          x: this.player.position.x,
+          y: this.player.position.y + 1.0,
+          z: this.player.position.z,
+        },
+        this.echoPulseManager.detectedTargets
+      );
       const lootCount = this.echoPulseManager.detectedTargets.filter((t) => t.type === 'LOOT').length;
       const enemyCount = this.echoPulseManager.detectedTargets.filter((t) => t.type === 'ENEMY').length;
       const interactCount = this.echoPulseManager.detectedTargets.filter((t) => t.type === 'INTERACTIVE').length;
@@ -402,6 +410,12 @@ export class GameEngine {
       this.player.cameraShake = 0.25;
       this.publishState();
     } else if (!didInteract && this.echoPulseManager.cooldownRemaining > 0) {
+      // Immediate dry spatial acoustic feedback for ability recharge lock
+      soundManager.playCooldownRefused({
+        x: this.player.position.x,
+        y: this.player.position.y + 1.0,
+        z: this.player.position.z,
+      });
       this.addFloatingText(
         `PULSE RECHARGING (${Math.ceil(this.echoPulseManager.cooldownRemaining)}s)`,
         '#64748b'
@@ -555,6 +569,16 @@ export class GameEngine {
     this.timelineManager.update(delta, this.player.position);
     this.echoPulseManager.update(delta, this.camera);
     this.player.handleInput(this.keys, delta, this.mouseDelta);
+
+    // 2a. Synchronize 3D spatial audio listener orientation and position from camera
+    const camDir = new THREE.Vector3();
+    this.camera.getWorldDirection(camDir);
+    soundManager.updateListener(
+      { x: this.camera.position.x, y: this.camera.position.y, z: this.camera.position.z },
+      { x: camDir.x, y: camDir.y, z: camDir.z },
+      { x: this.camera.up.x, y: this.camera.up.y, z: this.camera.up.z }
+    );
+
     this.world.update(delta, this.player.position);
     this.abyssalMetropolis.update(delta);
     this.weatherManager.update(
